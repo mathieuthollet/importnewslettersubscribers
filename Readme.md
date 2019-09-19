@@ -24,7 +24,7 @@ If this module ("E-mail subscription form" or "Newsletter block") is set up to s
 
 ## Support
 
-If you have any question or bug report, or suggestions to improve my module, contact me : TODO
+If you have any question or bug report, or suggestions to improve my module, contact me : https://addons.prestashop.com/fr/contactez-nous?id_product=46945
 
 I will do my best to help you with your module.
 

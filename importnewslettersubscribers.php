@@ -39,7 +39,7 @@ class ImportNewsletterSubscribers extends Module
     private $tablename;
 
     protected $config_form = false;
-    protected $support_url = 'TODO';
+    protected $support_url = 'https://addons.prestashop.com/fr/contactez-nous?id_product=46945';
 
     public function __construct()
     {
@@ -49,7 +49,7 @@ class ImportNewsletterSubscribers extends Module
         $this->author = 'Mathieu Thollet';
         $this->need_instance = 0;
         $this->bootstrap = true;
-        $this->module_key = 'TODO';
+        $this->module_key = 'c602079bd23b4cf258e40cb379d09f32';
 
         parent::__construct();
 
