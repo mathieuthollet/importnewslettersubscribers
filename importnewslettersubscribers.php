@@ -45,7 +45,7 @@ class ImportNewsletterSubscribers extends Module
     {
         $this->name = 'importnewslettersubscribers';
         $this->tab = 'emailing';
-        $this->version = '1.0.0';
+        $this->version = '1.0.1';
         $this->author = 'Mathieu Thollet';
         $this->need_instance = 0;
         $this->bootstrap = true;
@@ -190,45 +190,47 @@ class ImportNewsletterSubscribers extends Module
             $rows = explode("\n", $content);
             foreach ($rows as $row) {
                 $data = explode(';', $row);
-                $email = $data[0];
-                if (isset($data[1])) {
-                    $httpReferer = $data[1];
-                } else {
-                    $httpReferer = null;
-                }
-                // PS 1.7
-                if (Module::isInstalled('ps_emailsubscription')) {
-                    $this->tablename = 'emailsubscription';
-                    $register_status = $this->isNewsletterRegistered($email);
-                    if ($register_status > 0) {
-                        $emailsAlreadyRegistered[] = $email;
+                $email = trim($data[0]);
+                if (trim($email) != '') {
+                    if (isset($data[1])) {
+                        $httpReferer = trim($data[1]);
                     } else {
-                        if ($this->register($email, $register_status)) {
-                            if ($code = Configuration::get('NW_VOUCHER_CODE')) {
-                                $this->sendVoucher17($email, $code);
-                            }
-                            if (Configuration::get('NW_CONFIRMATION_EMAIL')) {
-                                $this->sendConfirmationEmail17($email);
-                            }
-                        }
-                        $emailsAdded[] = $email;
+                        $httpReferer = null;
                     }
-                } // PS 1.6
-                elseif (Module::isInstalled('blocknewsletter')) {
-                    $this->tablename = 'newsletter';
-                    $register_status = $this->isNewsletterRegistered($email);
-                    if ($register_status > 0) {
-                        $emailsAlreadyRegistered[] = $email;
-                    } else {
-                        if ($this->register($email, $register_status, $httpReferer)) {
-                            if ($code = Configuration::get('NW_VOUCHER_CODE')) {
-                                $this->sendVoucher16($email, $code);
+                    // PS 1.7
+                    if (Module::isInstalled('ps_emailsubscription')) {
+                        $this->tablename = 'emailsubscription';
+                        $register_status = $this->isNewsletterRegistered($email);
+                        if ($register_status > 0) {
+                            $emailsAlreadyRegistered[] = $email;
+                        } else {
+                            if ($this->register($email, $register_status)) {
+                                if ($code = Configuration::get('NW_VOUCHER_CODE')) {
+                                    $this->sendVoucher17($email, $code);
+                                }
+                                if (Configuration::get('NW_CONFIRMATION_EMAIL')) {
+                                    $this->sendConfirmationEmail17($email);
+                                }
                             }
-                            if (Configuration::get('NW_CONFIRMATION_EMAIL')) {
-                                $this->sendConfirmationEmail16($email);
-                            }
+                            $emailsAdded[] = $email;
                         }
-                        $emailsAdded[] = $email;
+                    } // PS 1.6
+                    elseif (Module::isInstalled('blocknewsletter')) {
+                        $this->tablename = 'newsletter';
+                        $register_status = $this->isNewsletterRegistered($email);
+                        if ($register_status > 0) {
+                            $emailsAlreadyRegistered[] = $email;
+                        } else {
+                            if ($this->register($email, $register_status, $httpReferer)) {
+                                if ($code = Configuration::get('NW_VOUCHER_CODE')) {
+                                    $this->sendVoucher16($email, $code);
+                                }
+                                if (Configuration::get('NW_CONFIRMATION_EMAIL')) {
+                                    $this->sendConfirmationEmail16($email);
+                                }
+                            }
+                            $emailsAdded[] = $email;
+                        }
                     }
                 }
             }
