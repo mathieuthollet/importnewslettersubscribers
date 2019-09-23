@@ -35,7 +35,7 @@ class ImportNewsletterSubscribers extends Module
     const GUEST_REGISTERED = 1;
     const CUSTOMER_REGISTERED = 2;
 
-    private $html = '';
+    private $message = '';
     private $tablename;
 
     protected $config_form = false;
@@ -79,7 +79,7 @@ class ImportNewsletterSubscribers extends Module
         }
         $this->context->smarty->assign('module_dir', $this->_path);
         $this->context->smarty->assign('support_url', $this->support_url);
-        $output = $this->html .
+        $output = $this->message .
             $this->context->smarty->fetch($this->local_path . 'views/templates/admin/import.tpl') .
             $this->renderImportForm() .
             $this->context->smarty->fetch($this->local_path . 'views/templates/admin/support.tpl');
@@ -93,13 +93,16 @@ class ImportNewsletterSubscribers extends Module
     protected function checkRequirements()
     {
         if (version_compare(_PS_VERSION_, '1.6', '<')) {
-            $this->html = '<p class="alert alert-danger">' . $this->l('Wrong Prestashop version : The module is only compatible with Prestashop 1.6 and Pretashop 1.7') . '</p>';
+            $this->context->smarty->assign('message', $this->l('Wrong Prestashop version : The module is only compatible with Prestashop 1.6 and Pretashop 1.7'));
+            $this->message .= $this->context->smarty->fetch($this->local_path . 'views/templates/admin/alert-danger.tpl');
         }
         if (version_compare(_PS_VERSION_, '1.6', '>=') && version_compare(_PS_VERSION_, '1.7', '<') && !Module::isInstalled('blocknewsletter')) {
-            $this->html = '<p class="alert alert-danger">' . $this->l('The module "Newsletter block" needs to be installed') . '</p>';
+            $this->context->smarty->assign('message', $this->l('The module "Newsletter block" needs to be installed'));
+            $this->message .= $this->context->smarty->fetch($this->local_path . 'views/templates/admin/alert-danger.tpl');
         }
         if (version_compare(_PS_VERSION_, '1.7', '>') && !Module::isInstalled('ps_emailsubscription')) {
-            $this->html = '<p class="alert alert-danger">' . $this->l('The module "E-mail subscription form" needs to be installed') . '</p>';
+            $this->context->smarty->assign('message', $this->l('The module "E-mail subscription form" needs to be installed'));
+            $this->message .= $this->context->smarty->fetch($this->local_path . 'views/templates/admin/alert-danger.tpl');
         }
     }
 
@@ -180,9 +183,11 @@ class ImportNewsletterSubscribers extends Module
     {
         set_time_limit(3600);
         if (!isset($_FILES['newsletter_subscribers_file']) || $_FILES['newsletter_subscribers_file']['name'] == '') {
-            $this->html = '<p class="alert alert-danger">' . $this->l('No file has been uploaded') . '</p>';
+            $this->context->smarty->assign('message', $this->l('No file has been uploaded'));
+            $this->message .= $this->context->smarty->fetch($this->local_path . 'views/templates/admin/alert-danger.tpl');
         } elseif (!in_array(pathinfo($_FILES['newsletter_subscribers_file']['name'])['extension'], array('csv', 'txt', 'CSV', 'TXT'))) {
-            $this->html = '<p class="alert alert-danger">' . $this->l('File type must be CSV or TXT') . '</p>';
+            $this->context->smarty->assign('message', $this->l('File type must be CSV or TXT'));
+            $this->message .= $this->context->smarty->fetch($this->local_path . 'views/templates/admin/alert-danger.tpl');
         } else {
             $emailsAdded = array();
             $emailsAlreadyRegistered = array();
@@ -234,14 +239,16 @@ class ImportNewsletterSubscribers extends Module
                     }
                 }
             }
-            $message = $this->l('The file has been imported.');
+            $this->context->smarty->assign('message', $this->l('The file has been imported.'));
+            $this->message .= $this->context->smarty->fetch($this->local_path . 'views/templates/admin/alert-success.tpl');
             if (count($emailsAdded) > 0) {
-                $message .= '<br/>' . $this->l('Emails imported') . ' : ' . implode(', ', $emailsAdded);
+                $this->context->smarty->assign('message', $this->l('Emails imported') . ' : ' . implode(', ', $emailsAdded));
+                $this->message .= $this->context->smarty->fetch($this->local_path . 'views/templates/admin/alert-success.tpl');
             }
             if (count($emailsAlreadyRegistered) > 0) {
-                $message .= '<br/>' . $this->l('Emails already registered') . ' : ' . implode(', ', $emailsAlreadyRegistered);
+                $this->context->smarty->assign('message', $this->l('Emails already registered') . ' : ' . implode(', ', $emailsAlreadyRegistered));
+                $this->message .= $this->context->smarty->fetch($this->local_path . 'views/templates/admin/alert-success.tpl');
             }
-            $this->html = '<p class="alert alert-success">' . $message . '</p>';
         }
     }
 
@@ -261,7 +268,7 @@ class ImportNewsletterSubscribers extends Module
         $sql = 'SELECT `email`
                 FROM ' . _DB_PREFIX_ . $this->tablename . '
                 WHERE `email` = \'' . pSQL($customer_email) . '\'
-                AND id_shop = ' . $this->context->shop->id;
+                AND id_shop = ' . (int)$this->context->shop->id;
 
         if (Db::getInstance()->getRow($sql)) {
             return self::GUEST_REGISTERED;
@@ -270,7 +277,7 @@ class ImportNewsletterSubscribers extends Module
         $sql = 'SELECT `newsletter`
                 FROM ' . _DB_PREFIX_ . 'customer
                 WHERE `email` = \'' . pSQL($customer_email) . '\'
-                AND id_shop = ' . $this->context->shop->id;
+                AND id_shop = ' . (int)$this->context->shop->id;
 
         if (!$registered = Db::getInstance()->getRow($sql)) {
             return self::GUEST_NOT_REGISTERED;
@@ -297,12 +304,12 @@ class ImportNewsletterSubscribers extends Module
     {
         $sql = 'INSERT INTO ' . _DB_PREFIX_ . $this->tablename . ' (id_shop, id_shop_group, email, newsletter_date_add, ip_registration_newsletter, http_referer, active)
 				VALUES
-				(' . $this->context->shop->id . ',
-				' . $this->context->shop->id_shop_group . ',
+				(' . (int)$this->context->shop->id . ',
+				' . (int)$this->context->shop->id_shop_group . ',
 				\'' . pSQL($email) . '\',
 				NOW(),
 				\'' . pSQL(Tools::getRemoteAddr()) . '\',
-				\'' . $httpReferer . '\',				
+				\'' . pSQL($httpReferer) . '\',				
 				' . (int)$active . '
 				)';
 
@@ -366,7 +373,7 @@ class ImportNewsletterSubscribers extends Module
         $sql = 'UPDATE ' . _DB_PREFIX_ . 'customer
                 SET `newsletter` = 1, newsletter_date_add = NOW(), `ip_registration_newsletter` = \'' . pSQL(Tools::getRemoteAddr()) . '\'
                 WHERE `email` = \'' . pSQL($email) . '\'
-                AND id_shop = ' . $this->context->shop->id;
+                AND id_shop = ' . (int)$this->context->shop->id;
 
         return Db::getInstance()->execute($sql);
     }
@@ -387,7 +394,7 @@ class ImportNewsletterSubscribers extends Module
             'newsletter_voucher',
             Mail::l('Newsletter voucher', $this->context->language->id),
             array('{discount}' => $code),
-            $email,
+            pSQL($email),
             null,
             null,
             null,
@@ -450,7 +457,7 @@ class ImportNewsletterSubscribers extends Module
             array(
                 '{discount}' => $code,
             ),
-            $email,
+            pSQL($email),
             null,
             null,
             null,
