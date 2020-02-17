@@ -45,7 +45,7 @@ class ImportNewsletterSubscribers extends Module
     {
         $this->name = 'importnewslettersubscribers';
         $this->tab = 'emailing';
-        $this->version = '1.0.1';
+        $this->version = '1.0.2';
         $this->author = 'Mathieu Thollet';
         $this->need_instance = 0;
         $this->bootstrap = true;
@@ -151,7 +151,11 @@ class ImportNewsletterSubscribers extends Module
                         'desc' =>
                             $this->l('Text file : one email address per row') . '<br/>' .
                             $this->l('or') . '<br/>' .
-                            $this->l('CSV file (semicolon separated) : email_address;http_referer'),
+                            $this->l('CSV file (semicolon separated) : email_address ; http_referer') . '<br/>' .
+                            $this->l('or') . '<br/>' .
+                            $this->l('CSV file (semicolon separated) : email_address ; http_referer ; newsletter_date_add') . '<br/>' .
+                            $this->l('or') . '<br/>' .
+                            $this->l('CSV file (semicolon separated) : email_address ; http_referer ; newsletter_date_add ; ip_registration_newsletter'),
                         'required' => true
                     ),
                 ),
@@ -198,9 +202,19 @@ class ImportNewsletterSubscribers extends Module
                 $email = trim($data[0]);
                 if (trim($email) != '') {
                     if (isset($data[1])) {
-                        $httpReferer = trim($data[1]);
+                        $httpReferer = substr(trim($data[1]), 0, 255);
                     } else {
                         $httpReferer = null;
+                    }
+                    if (isset($data[2])) {
+                        $newsletterDateAdd = date('Y-m-d H:i:s', strtotime(trim($data[2])));
+                    } else {
+                        $newsletterDateAdd = null;
+                    }
+                    if (isset($data[3])) {
+                        $ipRegistrationNewsletter = substr(trim($data[3]), 0, 15);
+                    } else {
+                        $ipRegistrationNewsletter = null;
                     }
                     // PS 1.7
                     if (Module::isInstalled('ps_emailsubscription')) {
@@ -209,7 +223,7 @@ class ImportNewsletterSubscribers extends Module
                         if ($register_status > 0) {
                             $emailsAlreadyRegistered[] = $email;
                         } else {
-                            if ($this->register($email, $register_status)) {
+                            if ($this->register($email, $register_status, $httpReferer, $newsletterDateAdd, $ipRegistrationNewsletter)) {
                                 if ($code = Configuration::get('NW_VOUCHER_CODE')) {
                                     $this->sendVoucher17($email, $code);
                                 }
@@ -226,7 +240,7 @@ class ImportNewsletterSubscribers extends Module
                         if ($register_status > 0) {
                             $emailsAlreadyRegistered[] = $email;
                         } else {
-                            if ($this->register($email, $register_status, $httpReferer)) {
+                            if ($this->register($email, $register_status, $httpReferer, $newsletterDateAdd, $ipRegistrationNewsletter)) {
                                 if ($code = Configuration::get('NW_VOUCHER_CODE')) {
                                     $this->sendVoucher16($email, $code);
                                 }
@@ -265,18 +279,18 @@ class ImportNewsletterSubscribers extends Module
      */
     public function isNewsletterRegistered($customer_email)
     {
-        $sql = 'SELECT `email`
+        $sql = 'SELECT email
                 FROM ' . _DB_PREFIX_ . $this->tablename . '
-                WHERE `email` = \'' . pSQL($customer_email) . '\'
+                WHERE email = \'' . pSQL($customer_email) . '\'
                 AND id_shop = ' . (int)$this->context->shop->id;
 
         if (Db::getInstance()->getRow($sql)) {
             return self::GUEST_REGISTERED;
         }
 
-        $sql = 'SELECT `newsletter`
+        $sql = 'SELECT newsletter
                 FROM ' . _DB_PREFIX_ . 'customer
-                WHERE `email` = \'' . pSQL($customer_email) . '\'
+                WHERE email = \'' . pSQL($customer_email) . '\'
                 AND id_shop = ' . (int)$this->context->shop->id;
 
         if (!$registered = Db::getInstance()->getRow($sql)) {
@@ -292,32 +306,6 @@ class ImportNewsletterSubscribers extends Module
 
 
     /**
-     * Subscribe a guest to the newsletter
-     *
-     * @param string $email
-     * @param bool $active
-     * @param string $httpReferer
-     *
-     * @return bool
-     */
-    protected function registerGuest($email, $active = true, $httpReferer = '')
-    {
-        $sql = 'INSERT INTO ' . _DB_PREFIX_ . $this->tablename . ' (id_shop, id_shop_group, email, newsletter_date_add, ip_registration_newsletter, http_referer, active)
-				VALUES
-				(' . (int)$this->context->shop->id . ',
-				' . (int)$this->context->shop->id_shop_group . ',
-				\'' . pSQL($email) . '\',
-				NOW(),
-				\'' . pSQL(Tools::getRemoteAddr()) . '\',
-				\'' . pSQL($httpReferer) . '\',				
-				' . (int)$active . '
-				)';
-
-        return Db::getInstance()->execute($sql);
-    }
-
-
-    /**
      * Return a token associated to an user
      *
      * @param string $email
@@ -326,15 +314,15 @@ class ImportNewsletterSubscribers extends Module
     protected function getToken($email, $register_status)
     {
         if (in_array($register_status, array(self::GUEST_NOT_REGISTERED, self::GUEST_REGISTERED))) {
-            $sql = 'SELECT MD5(CONCAT( `email` , `newsletter_date_add`, \'' . pSQL(Configuration::get('NW_SALT')) . '\')) as token
-					FROM `' . _DB_PREFIX_ . $this->tablename . '`
-					WHERE `active` = 0
-					AND `email` = \'' . pSQL($email) . '\'';
+            $sql = 'SELECT MD5(CONCAT( email , newsletter_date_add, \'' . pSQL(Configuration::get('NW_SALT')) . '\')) as token
+					FROM ' . _DB_PREFIX_ . $this->tablename . '
+					WHERE active = 0
+					AND email = \'' . pSQL($email) . '\'';
         } elseif ($register_status == self::CUSTOMER_NOT_REGISTERED) {
-            $sql = 'SELECT MD5(CONCAT( `email` , `date_add`, \'' . pSQL(Configuration::get('NW_SALT')) . '\' )) as token
-					FROM `' . _DB_PREFIX_ . 'customer`
-					WHERE `newsletter` = 0
-					AND `email` = \'' . pSQL($email) . '\'';
+            $sql = 'SELECT MD5(CONCAT( email , date_add, \'' . pSQL(Configuration::get('NW_SALT')) . '\' )) as token
+					FROM ' . _DB_PREFIX_ . 'customer
+					WHERE newsletter = 0
+					AND email = \'' . pSQL($email) . '\'';
         }
 
         return Db::getInstance()->getValue($sql);
@@ -349,13 +337,13 @@ class ImportNewsletterSubscribers extends Module
      * @param int $register_status
      * @param string $httpReferer
      */
-    protected function register($email, $register_status, $httpReferer = '')
+    protected function register($email, $register_status, $httpReferer = '', $newsletterDateAdd = '', $ipRegistrationNewsletter = '')
     {
         if ($register_status == self::GUEST_NOT_REGISTERED) {
-            return $this->registerGuest($email, true, $httpReferer);
+            return $this->registerGuest($email, $httpReferer, $newsletterDateAdd, $ipRegistrationNewsletter);
         }
         if ($register_status == self::CUSTOMER_NOT_REGISTERED) {
-            return $this->registerUser($email, true);
+            return $this->registerUser($email, $newsletterDateAdd, $ipRegistrationNewsletter);
         }
         return false;
     }
@@ -368,12 +356,40 @@ class ImportNewsletterSubscribers extends Module
      *
      * @return bool
      */
-    protected function registerUser($email)
+    protected function registerUser($email, $newsletterDateAdd = '', $ipRegistrationNewsletter = '')
     {
         $sql = 'UPDATE ' . _DB_PREFIX_ . 'customer
-                SET `newsletter` = 1, newsletter_date_add = NOW(), `ip_registration_newsletter` = \'' . pSQL(Tools::getRemoteAddr()) . '\'
-                WHERE `email` = \'' . pSQL($email) . '\'
+                SET newsletter = 1, 
+                newsletter_date_add = ' . ($newsletterDateAdd != '' ? '\'' . pSQL($newsletterDateAdd) . '\'' : 'NOW()') . ', 
+                ip_registration_newsletter = \'' . ($ipRegistrationNewsletter != '' ? pSQL($ipRegistrationNewsletter) : pSQL(Tools::getRemoteAddr())) . '\'
+                WHERE email = \'' . pSQL($email) . '\'
                 AND id_shop = ' . (int)$this->context->shop->id;
+
+        return Db::getInstance()->execute($sql);
+    }
+
+
+    /**
+     * Subscribe a guest to the newsletter
+     *
+     * @param string $email
+     * @param bool $active
+     * @param string $httpReferer
+     *
+     * @return bool
+     */
+    protected function registerGuest($email, $httpReferer = '', $newsletterDateAdd = '', $ipRegistrationNewsletter = '')
+    {
+        $sql = 'INSERT INTO ' . _DB_PREFIX_ . $this->tablename . ' (id_shop, id_shop_group, email, newsletter_date_add, ip_registration_newsletter, http_referer, active)
+				VALUES
+				(' . (int)$this->context->shop->id . ',
+				' . (int)$this->context->shop->id_shop_group . ',
+				\'' . pSQL($email) . '\',
+				' . ($newsletterDateAdd != '' ? '\'' . pSQL($newsletterDateAdd) . '\'' : 'NOW()') . ',
+				\'' . ($ipRegistrationNewsletter != '' ? pSQL($ipRegistrationNewsletter) : pSQL(Tools::getRemoteAddr())) . '\',
+				\'' . pSQL($httpReferer) . '\',				
+				1
+				)';
 
         return Db::getInstance()->execute($sql);
     }
