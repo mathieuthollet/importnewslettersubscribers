@@ -45,7 +45,7 @@ class ImportNewsletterSubscribers extends Module
     {
         $this->name = 'importnewslettersubscribers';
         $this->tab = 'emailing';
-        $this->version = '1.0.2';
+        $this->version = '1.0.3';
         $this->author = 'Mathieu Thollet';
         $this->need_instance = 0;
         $this->bootstrap = true;
@@ -216,8 +216,8 @@ class ImportNewsletterSubscribers extends Module
                     } else {
                         $ipRegistrationNewsletter = null;
                     }
-                    // PS 1.7
                     if (Module::isInstalled('ps_emailsubscription')) {
+                        // PS 1.7
                         $this->tablename = 'emailsubscription';
                         $register_status = $this->isNewsletterRegistered($email);
                         if ($register_status > 0) {
@@ -233,8 +233,8 @@ class ImportNewsletterSubscribers extends Module
                             }
                             $emailsAdded[] = $email;
                         }
-                    } // PS 1.6
-                    elseif (Module::isInstalled('blocknewsletter')) {
+                    } elseif (Module::isInstalled('blocknewsletter')) {
+                        // PS 1.6
                         $this->tablename = 'newsletter';
                         $register_status = $this->isNewsletterRegistered($email);
                         if ($register_status > 0) {
