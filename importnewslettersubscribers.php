@@ -1,6 +1,6 @@
 <?php
 /**
- * 2007-2021 PrestaShop
+ * 2007-2022 PrestaShop
  *
  * NOTICE OF LICENSE
  *
@@ -19,7 +19,7 @@
  * needs please refer to http://www.prestashop.com for more information.
  *
  * @author    PrestaShop SA <contact@prestashop.com>
- * @copyright 2007-2021 PrestaShop SA
+ * @copyright 2007-2022 PrestaShop SA
  * @license   http://opensource.org/licenses/afl-3.0.php  Academic Free License (AFL 3.0)
  *  International Registered Trademark & Property of PrestaShop SA
  */
@@ -45,7 +45,7 @@ class ImportNewsletterSubscribers extends Module
     {
         $this->name = 'importnewslettersubscribers';
         $this->tab = 'emailing';
-        $this->version = '1.0.4';
+        $this->version = '1.1.0';
         $this->author = 'AWebVision';
         $this->need_instance = 0;
         $this->bootstrap = true;
@@ -123,11 +123,14 @@ class ImportNewsletterSubscribers extends Module
         $helper->currentIndex = $this->context->link->getAdminLink('AdminModules', false)
             . '&configure=' . $this->name . '&tab_module=' . $this->tab . '&module_name=' . $this->name;
         $helper->token = Tools::getAdminTokenLite('AdminModules');
-        $helper->tpl_vars = array(
+        $helper->tpl_vars = [
             'languages' => $this->context->controller->getLanguages(),
             'id_language' => $this->context->language->id,
-        );
-        return $helper->generateForm(array($this->getImportForm()));
+        ];
+        $helper->fields_value = [
+            'unsubscribe_other' => (bool)Tools::getValue('unsubscribe_other'),
+        ];
+        return $helper->generateForm([$this->getImportForm()]);
     }
 
 
@@ -137,14 +140,14 @@ class ImportNewsletterSubscribers extends Module
      */
     protected function getImportForm()
     {
-        return array(
-            'form' => array(
-                'legend' => array(
+        return [
+            'form' => [
+                'legend' => [
                     'title' => $this->l('Import Newsletter Subscribers - Import Text / CSV file'),
                     'icon' => 'icon-file',
-                ),
-                'input' => array(
-                    array(
+                ],
+                'input' => [
+                    [
                         'type' => 'file',
                         'label' => $this->l('Text / CSV file'),
                         'name' => 'newsletter_subscribers_file',
@@ -157,15 +160,33 @@ class ImportNewsletterSubscribers extends Module
                             $this->l('or') . '<br/>' .
                             $this->l('CSV file (semicolon separated) : email_address ; http_referer ; newsletter_date_add ; ip_registration_newsletter'),
                         'required' => true
-                    ),
-                ),
-                'submit' => array(
+                    ],
+                    [
+                        'name' => 'unsubscribe_other',
+                        'type' => 'switch',
+                        'label' => $this->l('Unsubscribe emails who are not in the imported file'),
+                        'is_bool' => true,
+                        'values' => [
+                            [
+                                'id' => 'unsubscribe_other_on',
+                                'value' => 1,
+                                'label' => $this->l('Yes'),
+                            ],
+                            [
+                                'id' => 'unsubscribe_other_off',
+                                'value' => 0,
+                                'label' => $this->l('No'),
+                            ],
+                        ],
+                    ],
+                ],
+                'submit' => [
                     'title' => $this->l('Import'),
                     'id' => 'submitImport',
                     'icon' => 'process-icon-upload'
-                ),
-            ),
-        );
+                ],
+            ],
+        ];
     }
 
 
@@ -189,12 +210,12 @@ class ImportNewsletterSubscribers extends Module
         if (!isset($_FILES['newsletter_subscribers_file']) || $_FILES['newsletter_subscribers_file']['name'] == '') {
             $this->context->smarty->assign('message', $this->l('No file has been uploaded'));
             $this->message .= $this->context->smarty->fetch($this->local_path . 'views/templates/admin/alert-danger.tpl');
-        } elseif (!in_array(pathinfo($_FILES['newsletter_subscribers_file']['name'])['extension'], array('csv', 'txt', 'CSV', 'TXT'))) {
+        } elseif (!in_array(pathinfo($_FILES['newsletter_subscribers_file']['name'])['extension'], ['csv', 'txt', 'CSV', 'TXT'])) {
             $this->context->smarty->assign('message', $this->l('File type must be CSV or TXT'));
             $this->message .= $this->context->smarty->fetch($this->local_path . 'views/templates/admin/alert-danger.tpl');
         } else {
-            $emailsAdded = array();
-            $emailsAlreadyRegistered = array();
+            $emailsAdded = [];
+            $emailsAlreadyRegistered = [];
             $content = Tools::file_get_contents($_FILES['newsletter_subscribers_file']['tmp_name']);
             $rows = explode("\n", $content);
             foreach ($rows as $row) {
@@ -263,6 +284,32 @@ class ImportNewsletterSubscribers extends Module
                 $this->context->smarty->assign('message', $this->l('Emails already registered') . ' : ' . implode(', ', $emailsAlreadyRegistered));
                 $this->message .= $this->context->smarty->fetch($this->local_path . 'views/templates/admin/alert-success.tpl');
             }
+            if ((bool)Tools::getValue('unsubscribe_other')) {
+                $emailsUnregistered = [];
+                $allImportedEmails = array_merge($emailsAdded, $emailsAlreadyRegistered);
+                $sql = 'SELECT `email` FROM ' . _DB_PREFIX_ . $this->tablename . ' WHERE id_shop = ' . (int)$this->context->shop->id;
+                $rows = Db::getInstance()->executeS($sql);
+                foreach ($rows as $row) {
+                    if (!in_array($row['email'], $allImportedEmails)) {
+                        $sql = 'DELETE FROM ' . _DB_PREFIX_ . 'emailsubscription WHERE `email` = \'' . pSQL($row['email']) . '\' AND id_shop = ' . $this->context->shop->id;
+                        Db::getInstance()->execute($sql);
+                        $emailsUnregistered[] = $row['email'];
+                    }
+                }
+                $sql = 'SELECT `email` FROM ' . _DB_PREFIX_ . 'customer WHERE `newsletter`=1 AND id_shop = ' . (int)$this->context->shop->id;
+                $rows = Db::getInstance()->executeS($sql);
+                foreach ($rows as $row) {
+                    if (!in_array($row['email'], $allImportedEmails)) {
+                        $sql = 'UPDATE ' . _DB_PREFIX_ . 'customer SET `newsletter` = 0 WHERE `email` = \'' . pSQL($row['email']) . '\' AND id_shop = ' . $this->context->shop->id;
+                        Db::getInstance()->execute($sql);
+                        $emailsUnregistered[] = $row['email'];
+                    }
+                }
+                if (count($emailsUnregistered) > 0) {
+                    $this->context->smarty->assign('message', $this->l('Emails unregistered') . ' : ' . implode(', ', $emailsUnregistered));
+                    $this->message .= $this->context->smarty->fetch($this->local_path . 'views/templates/admin/alert-success.tpl');
+                }
+            }
         }
     }
 
@@ -313,7 +360,7 @@ class ImportNewsletterSubscribers extends Module
      */
     protected function getToken($email, $register_status)
     {
-        if (in_array($register_status, array(self::GUEST_NOT_REGISTERED, self::GUEST_REGISTERED))) {
+        if (in_array($register_status, [self::GUEST_NOT_REGISTERED, self::GUEST_REGISTERED])) {
             $sql = 'SELECT MD5(CONCAT( email , newsletter_date_add, \'' . pSQL(Configuration::get('NW_SALT')) . '\')) as token
 					FROM ' . _DB_PREFIX_ . $this->tablename . '
 					WHERE active = 0
@@ -409,7 +456,7 @@ class ImportNewsletterSubscribers extends Module
             $this->context->language->id,
             'newsletter_voucher',
             Mail::l('Newsletter voucher', $this->context->language->id),
-            array('{discount}' => $code),
+            ['{discount}' => $code],
             pSQL($email),
             null,
             null,
@@ -436,7 +483,7 @@ class ImportNewsletterSubscribers extends Module
             $this->context->language->id,
             'newsletter_conf',
             Mail::l('Newsletter confirmation', $this->context->language->id),
-            array(),
+            [],
             pSQL($email),
             null,
             null,
@@ -466,13 +513,13 @@ class ImportNewsletterSubscribers extends Module
             'newsletter_voucher',
             $this->trans(
                 'Newsletter voucher',
-                array(),
+                [],
                 'Emails.Subject',
                 $language->locale
             ),
-            array(
+            [
                 '{discount}' => $code,
-            ),
+            ],
             pSQL($email),
             null,
             null,
@@ -500,11 +547,11 @@ class ImportNewsletterSubscribers extends Module
             'newsletter_conf',
             $this->trans(
                 'Newsletter confirmation',
-                array(),
+                [],
                 'Emails.Subject',
                 $language->locale
             ),
-            array(),
+            [],
             pSQL($email),
             null,
             null,
