@@ -35,7 +35,7 @@ class ImportNewsletterSubscribers extends Module
     const GUEST_REGISTERED = 1;
     const CUSTOMER_REGISTERED = 2;
 
-    private $message = '';
+    public $message = '';
     private $tablename;
 
     protected $config_form = false;
@@ -45,7 +45,7 @@ class ImportNewsletterSubscribers extends Module
     {
         $this->name = 'importnewslettersubscribers';
         $this->tab = 'emailing';
-        $this->version = '1.1.0';
+        $this->version = '1.1.1';
         $this->author = 'AWebVision';
         $this->need_instance = 0;
         $this->bootstrap = true;
